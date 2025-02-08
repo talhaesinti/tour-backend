@@ -10,7 +10,9 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import os
 from pathlib import Path
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +22,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-%q&!a3y212bd$zgztm#u)(r4y*ze&xdai9*b$ymif^kv-f8+9m'
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-development-key-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 # Rest Framework Ayarları
 
@@ -36,6 +36,12 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',  # GET için token gerekmez, diğer işlemler için gereklidir
     ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
+    'DATA_UPLOAD_MAX_MEMORY_SIZE': 52428800,  # 50MB
 }
 
 
@@ -77,6 +83,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'myproject.urls'
@@ -105,8 +112,12 @@ WSGI_APPLICATION = 'myproject.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': config('DB_ENGINE', default='django.db.backends.sqlite3'),
+        'NAME': config('DB_NAME', default='db.sqlite3'),
+        'USER': config('DB_USER', default=''),
+        'PASSWORD': config('DB_PASSWORD', default=''),
+        'HOST': config('DB_HOST', default=''),
+        'PORT': config('DB_PORT', default=''),
     }
 }
 
@@ -143,21 +154,53 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.1/howto/static-files/
-
-STATIC_URL = 'static/'
-
-STATICFILES_DIRS = [BASE_DIR / "static"]
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',  # React uygulamanızın çalıştığı adres
+STATIC_URL = '/static/'  # URL'de görünecek yol
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # collectstatic komutu için hedef dizin
+STATICFILES_DIRS = [
+    BASE_DIR / 'myproject' / 'static'  # Projenin kendi statik dosyaları
 ]
+
+# Media files (Kullanıcı yüklemeleri)
+MEDIA_URL = '/media/'  # URL'de görünecek yol
+MEDIA_ROOT = BASE_DIR / 'media'  # Dosyaların kaydedileceği fiziksel yol
+
+# Whitenoise için static file serving
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# File upload güvenlik ayarları
+FILE_UPLOAD_PERMISSIONS = 0o644
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
+MAX_UPLOAD_SIZE = 52428800  # 50MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50MB
+
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default=[
+    'https://goldencastletravel.com',
+    'https://www.goldencastletravel.com',
+    'https://goldenpalace-six.vercel.app'
+], cast=lambda v: [s.strip() for s in v.split(',')] if isinstance(v, str) else v)
+
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default=[
+    'goldencastletravel.com',
+    'www.goldencastletravel.com',
+    '207.154.233.62'  # DigitalOcean Droplet IP
+], cast=lambda v: [s.strip() for s in v.split(',')] if isinstance(v, str) else v)
+
+# Security settings for production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+    SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
+    CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
+    SECURE_BROWSER_XSS_FILTER = config('SECURE_BROWSER_XSS_FILTER', default=True, cast=bool)
+    SECURE_CONTENT_TYPE_NOSNIFF = config('SECURE_CONTENT_TYPE_NOSNIFF', default=True, cast=bool)
+    X_FRAME_OPTIONS = config('X_FRAME_OPTIONS', default='DENY')
+    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True, cast=bool)
+    SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
+    
+    # Production için ek güvenlik ayarları
+    CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default=[
+        'https://goldencastletravel.com',
+        'https://www.goldencastletravel.com',
+        'https://goldenpalace-six.vercel.app'
+    ], cast=lambda v: [s.strip() for s in v.split(',')] if isinstance(v, str) else v)
